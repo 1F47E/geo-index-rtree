@@ -96,18 +96,60 @@ func main() {
 	runBenchmarks()
 	
 	// Phase 3: Radius Searches
-	time.Sleep(500 * time.Millisecond)
-	runRadiusSearches()
+	// time.Sleep(500 * time.Millisecond)
+	// runRadiusSearches()
 	
 	// Phase 4: Nearest Neighbor
-	time.Sleep(500 * time.Millisecond)
-	runNearestNeighbors()
+	// time.Sleep(500 * time.Millisecond)
+	// runNearestNeighbors()
 	
 	// Summary
 	printSummary()
 }
 
 func loadAndIndex() {
+	// Check if index already exists
+	if fileInfo, err := os.Stat(indexFile); err == nil {
+		printSubtitle("Using Existing Index")
+		
+		// Load and verify the index
+		index := rtree.NewGeoIndex()
+		if err := index.LoadFromFile(indexFile); err != nil {
+			fmt.Printf("%sError loading existing index: %v%s\n", colorRed, err, colorReset)
+			fmt.Println("Regenerating index...")
+		} else {
+			count := index.Count()
+			
+			// Get file size in human readable format
+			fileSize := fileInfo.Size()
+			var sizeStr string
+			switch {
+			case fileSize >= 1<<30: // GB
+				sizeStr = fmt.Sprintf("%.2f GB", float64(fileSize)/(1<<30))
+			case fileSize >= 1<<20: // MB
+				sizeStr = fmt.Sprintf("%.2f MB", float64(fileSize)/(1<<20))
+			case fileSize >= 1<<10: // KB
+				sizeStr = fmt.Sprintf("%.2f KB", float64(fileSize)/(1<<10))
+			default:
+				sizeStr = fmt.Sprintf("%d bytes", fileSize)
+			}
+			
+			printSuccess(fmt.Sprintf("Found existing index: %s", indexFile))
+			fmt.Println()
+			printStat("Index file size", sizeStr)
+			printStat("Points indexed", fmt.Sprintf("%s%d%s", colorGreen, count, colorReset))
+			printStat("Points per MB", fmt.Sprintf("%.0f", float64(count)/(float64(fileSize)/(1<<20))))
+			printStat("Worker threads", runtime.NumCPU())
+			
+			if count >= 1000000 {
+				fmt.Println()
+				printInfo("Skipping index generation - using existing data")
+				return
+			}
+			fmt.Printf("\n%sExisting index has insufficient points, regenerating...%s\n", colorYellow, colorReset)
+		}
+	}
+	
 	printSubtitle("Loading Points")
 	
 	numPoints := 1000000
@@ -193,80 +235,65 @@ func runBenchmarks() {
 		log.Fatalf("Failed to load index: %v", err)
 	}
 	
-	numQueries := 1000
+	benchDuration := 10 * time.Second
 	numWorkers := runtime.NumCPU()
 	
-	fmt.Printf("Executing %s%d%s bounding box queries using %s%d%s workers...\n",
-		colorBold, numQueries, colorReset, colorBold, numWorkers, colorReset)
-	
-	// Prepare queries
-	queries := make([]struct{ latBL, lonBL, latTR, lonTR float64 }, numQueries)
-	for i := 0; i < numQueries; i++ {
-		centerLat := rand.Float64()*180 - 90
-		centerLon := rand.Float64()*360 - 180
-		boxSize := rand.Float64()*1.9 + 0.1
-		
-		queries[i] = struct{ latBL, lonBL, latTR, lonTR float64 }{
-			latBL: centerLat - boxSize/2,
-			lonBL: centerLon - boxSize/2,
-			latTR: centerLat + boxSize/2,
-			lonTR: centerLon + boxSize/2,
-		}
-	}
+	fmt.Printf("Running bounding box queries for %s%v%s using %s%d%s workers...\n",
+		colorBold, benchDuration, colorReset, colorBold, numWorkers, colorReset)
 	
 	// Run benchmark
-	var totalResults atomic.Int64
-	var queryCount atomic.Int32
+	var queryCount atomic.Int64
 	
 	start := time.Now()
+	deadline := start.Add(benchDuration)
 	
 	// Progress reporter
 	done := make(chan bool)
 	go func() {
-		ticker := time.NewTicker(50 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		
 		for {
 			select {
 			case <-done:
-				printProgress(numQueries, numQueries, "Querying")
+				fmt.Println()
 				return
 			case <-ticker.C:
-				current := int(queryCount.Load())
-				printProgress(current, numQueries, "Querying")
+				elapsed := time.Since(start)
+				percent := elapsed.Seconds() / benchDuration.Seconds() * 100
+				if percent > 100 {
+					percent = 100
+				}
+				printProgress(int(percent), 100, "Benchmarking")
 			}
 		}
 	}()
 	
 	var wg sync.WaitGroup
-	queriesPerWorker := numQueries / numWorkers
 	
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
-		startIdx := w * queriesPerWorker
-		endIdx := startIdx + queriesPerWorker
-		if w == numWorkers-1 {
-			endIdx = numQueries
-		}
 		
-		go func(start, end int) {
+		go func() {
 			defer wg.Done()
 			
-			localResults := 0
-			for i := start; i < end; i++ {
-				q := queries[i]
+			for time.Now().Before(deadline) {
+				// Random query
+				centerLat := rand.Float64()*180 - 90
+				centerLon := rand.Float64()*360 - 180
+				boxSize := rand.Float64()*1.9 + 0.1
+				
 				box := models.BoundingBox{
-					BottomLeft: models.Location{Lat: q.latBL, Lon: q.lonBL},
-					TopRight: models.Location{Lat: q.latTR, Lon: q.lonTR},
+					BottomLeft: models.Location{Lat: centerLat - boxSize/2, Lon: centerLon - boxSize/2},
+					TopRight: models.Location{Lat: centerLat + boxSize/2, Lon: centerLon + boxSize/2},
 				}
-				results, err := index.QueryBox(box)
+				
+				_, err := index.QueryBox(box)
 				if err == nil {
-					localResults += len(results)
+					queryCount.Add(1)
 				}
-				queryCount.Add(1)
 			}
-			totalResults.Add(int64(localResults))
-		}(startIdx, endIdx)
+		}()
 	}
 	
 	wg.Wait()
@@ -276,12 +303,8 @@ func runBenchmarks() {
 	completedQueries := queryCount.Load()
 	fmt.Println()
 	printSuccess("Bounding Box Queries Complete!")
-	printStat("Total queries", completedQueries)
-	printStat("Total time", elapsed)
-	printStat("Queries per second", fmt.Sprintf("%.0f", float64(completedQueries)/elapsed.Seconds()))
-	printStat("Average query time", elapsed/time.Duration(completedQueries))
-	printStat("Total results found", totalResults.Load())
-	printStat("Average results per query", fmt.Sprintf("%.1f", float64(totalResults.Load())/float64(completedQueries)))
+	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorGreen, float64(completedQueries)/elapsed.Seconds(), colorReset))
+	printStat("Average query time", fmt.Sprintf("%s%v%s", colorGreen, elapsed/time.Duration(completedQueries), colorReset))
 }
 
 func runRadiusSearches() {
@@ -293,74 +316,64 @@ func runRadiusSearches() {
 		log.Fatalf("Failed to load index: %v", err)
 	}
 	
-	numQueries := 1000
+	benchDuration := 10 * time.Second
 	numWorkers := runtime.NumCPU()
 	searchRadius := 50.0 // km
 	
-	fmt.Printf("Executing %s%d%s radius searches (%s%.1f km%s) using %s%d%s workers...\n",
-		colorBold, numQueries, colorReset, 
+	fmt.Printf("Running radius searches (%s%.0f km%s) for %s%v%s using %s%d%s workers...\n",
 		colorBold, searchRadius, colorReset,
+		colorBold, benchDuration, colorReset, 
 		colorBold, numWorkers, colorReset)
 	
-	// Prepare center points
-	centers := make([]struct{ lat, lon float64 }, numQueries)
-	for i := 0; i < numQueries; i++ {
-		centers[i] = struct{ lat, lon float64 }{
-			lat: rand.Float64()*180 - 90,
-			lon: rand.Float64()*360 - 180,
-		}
-	}
-	
 	// Run benchmark
-	var totalResults atomic.Int64
-	var queryCount atomic.Int32
+	var queryCount atomic.Int64
 	
 	start := time.Now()
+	deadline := start.Add(benchDuration)
 	
 	// Progress reporter
 	done := make(chan bool)
 	go func() {
-		ticker := time.NewTicker(50 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		
 		for {
 			select {
 			case <-done:
-				printProgress(numQueries, numQueries, "Searching")
+				fmt.Println()
 				return
 			case <-ticker.C:
-				current := int(queryCount.Load())
-				printProgress(current, numQueries, "Searching")
+				elapsed := time.Since(start)
+				percent := elapsed.Seconds() / benchDuration.Seconds() * 100
+				if percent > 100 {
+					percent = 100
+				}
+				printProgress(int(percent), 100, "Benchmarking")
 			}
 		}
 	}()
 	
 	var wg sync.WaitGroup
-	queriesPerWorker := numQueries / numWorkers
 	
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
-		startIdx := w * queriesPerWorker
-		endIdx := startIdx + queriesPerWorker
-		if w == numWorkers-1 {
-			endIdx = numQueries
-		}
 		
-		go func(start, end int) {
+		go func() {
 			defer wg.Done()
 			
-			localResults := 0
-			for i := start; i < end; i++ {
-				c := centers[i]
-				center := models.Location{Lat: c.lat, Lon: c.lon}
-				results, err := index.QueryRadius(center, searchRadius)
-				if err == nil {
-					localResults += len(results)
+			for time.Now().Before(deadline) {
+				// Random center point
+				center := models.Location{
+					Lat: rand.Float64()*180 - 90,
+					Lon: rand.Float64()*360 - 180,
 				}
-				queryCount.Add(1)
+				
+				_, err := index.QueryRadius(center, searchRadius)
+				if err == nil {
+					queryCount.Add(1)
+				}
 			}
-			totalResults.Add(int64(localResults))
-		}(startIdx, endIdx)
+		}()
 	}
 	
 	wg.Wait()
@@ -370,13 +383,8 @@ func runRadiusSearches() {
 	completedQueries := queryCount.Load()
 	fmt.Println()
 	printSuccess("Radius Searches Complete!")
-	printStat("Total queries", completedQueries)
-	printStat("Search radius", fmt.Sprintf("%.1f km", searchRadius))
-	printStat("Total time", elapsed)
-	printStat("Queries per second", fmt.Sprintf("%.0f", float64(completedQueries)/elapsed.Seconds()))
-	printStat("Average query time", elapsed/time.Duration(completedQueries))
-	printStat("Total results found", totalResults.Load())
-	printStat("Average results per query", fmt.Sprintf("%.1f", float64(totalResults.Load())/float64(completedQueries)))
+	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorGreen, float64(completedQueries)/elapsed.Seconds(), colorReset))
+	printStat("Average query time", fmt.Sprintf("%s%v%s", colorGreen, elapsed/time.Duration(completedQueries), colorReset))
 }
 
 func runNearestNeighbors() {
@@ -388,72 +396,62 @@ func runNearestNeighbors() {
 		log.Fatalf("Failed to load index: %v", err)
 	}
 	
-	numQueries := 1000
+	benchDuration := 10 * time.Second
 	numWorkers := runtime.NumCPU()
 	numNeighbors := 10
 	
-	fmt.Printf("Finding %s%d%s nearest neighbors for %s%d%s queries using %s%d%s workers...\n",
+	fmt.Printf("Finding %s%d%s nearest neighbors for %s%v%s using %s%d%s workers...\n",
 		colorBold, numNeighbors, colorReset,
-		colorBold, numQueries, colorReset,
+		colorBold, benchDuration, colorReset,
 		colorBold, numWorkers, colorReset)
 	
-	// Prepare query points
-	queryPoints := make([]struct{ lat, lon float64 }, numQueries)
-	for i := 0; i < numQueries; i++ {
-		queryPoints[i] = struct{ lat, lon float64 }{
-			lat: rand.Float64()*180 - 90,
-			lon: rand.Float64()*360 - 180,
-		}
-	}
-	
 	// Run benchmark
-	var totalResults atomic.Int64
-	var queryCount atomic.Int32
+	var queryCount atomic.Int64
 	
 	start := time.Now()
+	deadline := start.Add(benchDuration)
 	
 	// Progress reporter
 	done := make(chan bool)
 	go func() {
-		ticker := time.NewTicker(50 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		
 		for {
 			select {
 			case <-done:
-				printProgress(numQueries, numQueries, "Finding")
+				fmt.Println()
 				return
 			case <-ticker.C:
-				current := int(queryCount.Load())
-				printProgress(current, numQueries, "Finding")
+				elapsed := time.Since(start)
+				percent := elapsed.Seconds() / benchDuration.Seconds() * 100
+				if percent > 100 {
+					percent = 100
+				}
+				printProgress(int(percent), 100, "Benchmarking")
 			}
 		}
 	}()
 	
 	var wg sync.WaitGroup
-	queriesPerWorker := numQueries / numWorkers
 	
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
-		startIdx := w * queriesPerWorker
-		endIdx := startIdx + queriesPerWorker
-		if w == numWorkers-1 {
-			endIdx = numQueries
-		}
 		
-		go func(start, end int) {
+		go func() {
 			defer wg.Done()
 			
-			localResults := 0
-			for i := start; i < end; i++ {
-				q := queryPoints[i]
-				center := models.Location{Lat: q.lat, Lon: q.lon}
-				results := index.NearestNeighbors(center, numNeighbors)
-				localResults += len(results)
+			for time.Now().Before(deadline) {
+				// Random query point
+				center := models.Location{
+					Lat: rand.Float64()*180 - 90,
+					Lon: rand.Float64()*360 - 180,
+				}
+				
+				_ = index.NearestNeighbors(center, numNeighbors)
 				queryCount.Add(1)
 			}
-			totalResults.Add(int64(localResults))
-		}(startIdx, endIdx)
+		}()
 	}
 	
 	wg.Wait()
@@ -463,12 +461,8 @@ func runNearestNeighbors() {
 	completedQueries := queryCount.Load()
 	fmt.Println()
 	printSuccess("Nearest Neighbor Searches Complete!")
-	printStat("Total queries", completedQueries)
-	printStat("Neighbors requested", numNeighbors)
-	printStat("Total time", elapsed)
-	printStat("Queries per second", fmt.Sprintf("%.0f", float64(completedQueries)/elapsed.Seconds()))
-	printStat("Average query time", elapsed/time.Duration(completedQueries))
-	printStat("Total results found", totalResults.Load())
+	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorGreen, float64(completedQueries)/elapsed.Seconds(), colorReset))
+	printStat("Average query time", fmt.Sprintf("%s%v%s", colorGreen, elapsed/time.Duration(completedQueries), colorReset))
 }
 
 func printSummary() {
@@ -477,13 +471,11 @@ func printSummary() {
 	fmt.Printf("\n%sThe R-Tree index demonstrated:%s\n", colorBold, colorReset)
 	printInfo(fmt.Sprintf("Parallel loading using %d CPU cores", runtime.NumCPU()))
 	printInfo("Efficient bounding box queries")
-	printInfo("Fast radius searches")
-	printInfo("Quick nearest neighbor lookups")
+	// printInfo("Fast radius searches (50km)")
+	// printInfo("Quick k-nearest neighbor lookups (k=10)")
 	
-	fmt.Printf("\n%sPerformance Highlights:%s\n", colorBold, colorReset)
-	printInfo("Indexed 1 million points in seconds")
-	printInfo("Thousands of queries per second")
-	printInfo("Sub-millisecond average query times")
+	fmt.Printf("\n%sBenchmark Duration:%s 10 seconds per test\n", colorBold, colorReset)
+	fmt.Printf("%sTest Dataset:%s 1,000,000 geographic points\n", colorBold, colorReset)
 	
 	fmt.Println()
 }
