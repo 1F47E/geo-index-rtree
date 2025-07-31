@@ -75,14 +75,13 @@ func (p *PostGISIndex) CreateSpatialIndex() error {
 		return fmt.Errorf("failed to analyze table: %w", err)
 	}
 	
-	elapsed := time.Since(start)
-	fmt.Printf("Created spatial index in %v\n", elapsed)
+	_ = time.Since(start) // Track time but don't print here
 	
 	return nil
 }
 
 // BulkInsertPoints inserts points in batches for better performance
-func (p *PostGISIndex) BulkInsertPoints(points []*models.Point) error {
+func (p *PostGISIndex) BulkInsertPoints(points []*models.Point, progressCallback func(loaded, total int)) error {
 	const batchSize = 10000
 	
 	// Prepare statement
@@ -112,6 +111,11 @@ func (p *PostGISIndex) BulkInsertPoints(points []*models.Point) error {
 			return fmt.Errorf("failed to insert point %s: %w", point.ID, err)
 		}
 		
+		// Report progress every 1000 points
+		if progressCallback != nil && (i+1)%1000 == 0 {
+			progressCallback(i+1, len(points))
+		}
+		
 		// Commit batch
 		if (i+1)%batchSize == 0 {
 			if err := tx.Commit(); err != nil {
@@ -130,6 +134,11 @@ func (p *PostGISIndex) BulkInsertPoints(points []*models.Point) error {
 	// Commit final batch
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit final batch: %w", err)
+	}
+	
+	// Final progress update
+	if progressCallback != nil {
+		progressCallback(len(points), len(points))
 	}
 	
 	return nil

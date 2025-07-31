@@ -381,21 +381,43 @@ func runPostGISBenchmark() benchmarkStats {
 		// Generate same points
 		points := generateRandomPoints(1000000)
 		
-		// Bulk insert
+		// Bulk insert with progress
 		start := time.Now()
-		if err := db.BulkInsertPoints(points); err != nil {
+		lastProgress := 0
+		
+		progressCallback := func(loaded, total int) {
+			percent := loaded * 100 / total
+			if percent > lastProgress {
+				printProgress(percent, 100, fmt.Sprintf("Loading %d points", total))
+				lastProgress = percent
+			}
+		}
+		
+		fmt.Println() // New line for progress bar
+		err = db.BulkInsertPoints(points, progressCallback)
+		fmt.Println() // Clear line after progress
+		
+		if err != nil {
 			log.Printf("Failed to insert points: %v", err)
 			return benchmarkStats{}
 		}
 		
+		loadElapsed := time.Since(start)
+		printSuccess(fmt.Sprintf("Loaded %d points in %v", len(points), loadElapsed))
+		
 		// Create spatial index
+		printInfo("Creating spatial index...")
+		indexStart := time.Now()
 		if err := db.CreateSpatialIndex(); err != nil {
 			log.Printf("Failed to create spatial index: %v", err)
 			return benchmarkStats{}
 		}
+		indexElapsed := time.Since(indexStart)
+		printSuccess(fmt.Sprintf("Created spatial index in %v", indexElapsed))
 		
-		elapsed := time.Since(start)
-		printSuccess(fmt.Sprintf("Loaded %d points into PostGIS in %v", len(points), elapsed))
+		totalElapsed := time.Since(start)
+		fmt.Println()
+		printStat("Total PostGIS setup time", totalElapsed.String())
 	}
 	
 	benchDuration := 10 * time.Second
