@@ -116,19 +116,13 @@ func printProgress(current, total int, label string) {
 }
 
 func loadConfig() error {
-	// Try to load config.yaml
 	data, err := os.ReadFile("config.yaml")
 	if err != nil {
-		// If config.yaml doesn't exist, try config.yaml.example
-		data, err = os.ReadFile("config.yaml.example")
-		if err != nil {
-			return fmt.Errorf("config.yaml not found. Please copy config.yaml.example to config.yaml")
-		}
-		fmt.Printf("%sUsing config.yaml.example (copy to config.yaml for custom settings)%s\n", colorYellow, colorReset)
+		return fmt.Errorf("failed to read config.yaml: %w", err)
 	}
 	
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+		return fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
 	
 	return nil

@@ -26,4 +26,4 @@ network:
   # 0 = no simulation (local database)
   # 3 = typical cloud database latency in same region
   # 10-50 = cross-region latency
-  simulated_latency_ms: 4
+  simulated_latency_ms: 3

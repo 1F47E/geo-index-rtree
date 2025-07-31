@@ -44,9 +44,6 @@ cd geo-index-rtree
 # Install dependencies
 make install-deps
 
-# Copy configuration file
-cp config.yaml.example config.yaml
-
 # Run the demo
 make demo
 ```
