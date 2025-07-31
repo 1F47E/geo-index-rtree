@@ -34,6 +34,7 @@ help:
 	@echo "Demo commands:"
 	@echo "  make demo           - Run R-Tree demo with colorful output"
 	@echo "  make demo-full      - Run full demo with PostGIS comparison"
+	@echo "  make demo-full-real - Run demo with simulated network latency (config.yaml)"
 	@echo "  make load-1m        - Load 1 million random points"
 	@echo "  make load-10m       - Load 10 million random points"
 	@echo "  make load-100m      - Load 100 million random points"
@@ -200,5 +201,11 @@ postgis-logs:
 
 # Demo with PostGIS comparison
 demo-full: postgis-down postgis-up demo
+
+# Demo with PostGIS comparison and network latency simulation
+demo-full-real: postgis-down postgis-up
+	@echo ""
+	@echo "Running demo with simulated network latency (configured in config.yaml)..."
+	@$(GO) run ./cmd/demo/demo.go --network-latency
 
 .SILENT: help

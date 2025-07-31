@@ -44,6 +44,9 @@ cd geo-index-rtree
 # Install dependencies
 make install-deps
 
+# Copy configuration file
+cp config.yaml.example config.yaml
+
 # Run the demo
 make demo
 ```
@@ -73,6 +76,17 @@ This runs both R-Tree and PostGIS benchmarks:
 3. Runs identical benchmarks
 4. Shows side-by-side comparison
 5. Automatically stops PostGIS when done
+
+### Real-World Cloud Demo
+
+```bash
+make demo-full-real
+```
+
+This simulates real-world cloud database performance:
+- Adds network latency to PostGIS queries (configured in config.yaml)
+- Default: 3ms latency (typical same-region cloud database)
+- Shows the true advantage of in-memory R-Tree vs remote databases
 
 ### Example Output
 
@@ -213,18 +227,32 @@ go-geo-index/
 
 ## ⚙️ Configuration
 
-### Environment Variables
+### Configuration File (config.yaml)
+
+All demo parameters are configured in `config.yaml`:
+
+```yaml
+demo:
+  points: 1000000              # Number of points to generate
+  benchmark_duration: 10       # Benchmark duration in seconds
+
+postgis:
+  host: localhost
+  port: 5499                   # PostGIS port
+  user: geouser
+  password: geopass
+  database: geodb
+
+network:
+  simulated_latency_ms: 3      # Network latency simulation (0 = disabled)
+```
+
+### Environment Variables (Makefile)
 - `POINTS` - Number of points to load (default: 1,000,000)
 - `WORKERS` - Number of worker threads (default: CPU count)
 - `QUERIES` - Number of queries to run (default: 1,000)
 - `RADIUS` - Search radius in km (default: 50)
 - `NEIGHBORS` - Number of nearest neighbors (default: 10)
-
-### PostGIS Configuration
-- **Port**: 5499 (configurable in docker-compose.yml)
-- **Database**: geodb
-- **User**: geouser
-- **Password**: geopass
 
 ## 🧪 Advanced Usage
 

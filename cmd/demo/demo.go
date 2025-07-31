@@ -15,9 +15,30 @@ import (
 	"github.com/1F47E/geo-index-rtree/pkg/postgis"
 	"github.com/1F47E/geo-index-rtree/pkg/rtree"
 	"github.com/mattn/go-isatty"
+	"gopkg.in/yaml.v3"
 )
 
 const indexFile = "geo_index.gob"
+
+// Config structure for YAML configuration
+type Config struct {
+	Demo struct {
+		Points             int `yaml:"points"`
+		BenchmarkDuration  int `yaml:"benchmark_duration"`
+	} `yaml:"demo"`
+	PostGIS struct {
+		Host               string `yaml:"host"`
+		Port               int    `yaml:"port"`
+		User               string `yaml:"user"`
+		Password           string `yaml:"password"`
+		Database           string `yaml:"database"`
+		MaxConnections     int    `yaml:"max_connections"`
+		ConnectionTimeout  int    `yaml:"connection_timeout"`
+	} `yaml:"postgis"`
+	Network struct {
+		SimulatedLatencyMs int `yaml:"simulated_latency_ms"`
+	} `yaml:"network"`
+}
 
 var (
 	// ANSI color codes
@@ -29,6 +50,13 @@ var (
 	colorPurple = "\033[35m"
 	colorCyan   = "\033[36m"
 	colorBold   = "\033[1m"
+	
+	// Configuration
+	config Config
+	
+	// Network latency simulation
+	simulateNetworkLatency = false
+	networkLatency time.Duration
 )
 
 func init() {
@@ -87,7 +115,37 @@ func printProgress(current, total int, label string) {
 	}
 }
 
+func loadConfig() error {
+	// Try to load config.yaml
+	data, err := os.ReadFile("config.yaml")
+	if err != nil {
+		// If config.yaml doesn't exist, try config.yaml.example
+		data, err = os.ReadFile("config.yaml.example")
+		if err != nil {
+			return fmt.Errorf("config.yaml not found. Please copy config.yaml.example to config.yaml")
+		}
+		fmt.Printf("%sUsing config.yaml.example (copy to config.yaml for custom settings)%s\n", colorYellow, colorReset)
+	}
+	
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+	
+	return nil
+}
+
 func main() {
+	// Load configuration
+	if err := loadConfig(); err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+	
+	// Check for network latency simulation flag
+	if len(os.Args) > 1 && os.Args[1] == "--network-latency" {
+		simulateNetworkLatency = true
+		networkLatency = time.Duration(config.Network.SimulatedLatencyMs) * time.Millisecond
+	}
+	
 	printTitle("Go Geo-Index Demo")
 	
 	// Phase 1: Load Points
@@ -160,7 +218,7 @@ func loadAndIndex() {
 			printStat("Points per MB", fmt.Sprintf("%.0f", float64(count)/(float64(fileSize)/(1<<20))))
 			printStat("CPU partitions", runtime.NumCPU())
 			
-			if count >= 1000000 {
+			if count >= int64(config.Demo.Points) {
 				fmt.Println()
 				printInfo("Skipping index generation - using existing data")
 				return
@@ -171,7 +229,7 @@ func loadAndIndex() {
 	
 	printSubtitle("Loading Points")
 	
-	numPoints := 1000000
+	numPoints := config.Demo.Points
 	numCPU := runtime.NumCPU()
 	
 	fmt.Printf("Generating %s%d%s random geographic points...\n", colorBold, numPoints, colorReset)
@@ -250,7 +308,7 @@ func runBenchmarks() benchmarkStats {
 		log.Fatalf("Failed to load index: %v", err)
 	}
 	
-	benchDuration := 10 * time.Second
+	benchDuration := time.Duration(config.Demo.BenchmarkDuration) * time.Second
 	
 	fmt.Printf("Running %ssingle-threaded%s benchmark for %s%v%s\n", 
 		colorBold, colorReset, colorBold, benchDuration, colorReset)
@@ -325,7 +383,12 @@ func runPostGISBenchmark() benchmarkStats {
 	
 	// Connect to PostGIS
 	printInfo("Connecting to PostGIS...")
-	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5499)
+	db, err := postgis.NewPostGISIndex(
+		config.PostGIS.Host, 
+		config.PostGIS.User, 
+		config.PostGIS.Password, 
+		config.PostGIS.Database, 
+		config.PostGIS.Port)
 	if err != nil {
 		printError(fmt.Sprintf("PostGIS connection failed: %v", err))
 		fmt.Println()
@@ -341,7 +404,7 @@ func runPostGISBenchmark() benchmarkStats {
 	
 	// Check if data is already loaded
 	count, err := db.Count()
-	if err == nil && count >= 1000000 {
+	if err == nil && count >= int64(config.Demo.Points) {
 		printSuccess(fmt.Sprintf("Found existing PostGIS data with %d points", count))
 		
 		// Get and display database statistics
@@ -365,7 +428,7 @@ func runPostGISBenchmark() benchmarkStats {
 		}
 		
 		// Generate same points
-		points := generateRandomPoints(1000000)
+		points := generateRandomPoints(config.Demo.Points)
 		
 		// Bulk insert with progress
 		start := time.Now()
@@ -406,11 +469,14 @@ func runPostGISBenchmark() benchmarkStats {
 		printStat("Total PostGIS setup time", totalElapsed.String())
 	}
 	
-	benchDuration := 10 * time.Second
+	benchDuration := time.Duration(config.Demo.BenchmarkDuration) * time.Second
 	
 	fmt.Printf("Running %ssingle-threaded%s benchmark for %s%v%s\n", 
 		colorBold, colorReset, colorBold, benchDuration, colorReset)
 	fmt.Printf("PostGIS: Each query runs %ssequentially%s (no internal parallelism)\n", colorYellow, colorReset)
+	if simulateNetworkLatency {
+		fmt.Printf("%sSimulating network latency: +%v per query%s\n", colorCyan, networkLatency, colorReset)
+	}
 	
 	// Run benchmark
 	var queryCount atomic.Int64
@@ -455,6 +521,10 @@ func runPostGISBenchmark() benchmarkStats {
 		_, err := db.QueryBox(box)
 		if err == nil {
 			queryCount.Add(1)
+			// Simulate network latency
+			if simulateNetworkLatency {
+				time.Sleep(networkLatency)
+			}
 		}
 	}
 	done <- true
@@ -466,7 +536,11 @@ func runPostGISBenchmark() benchmarkStats {
 	printStat("Total queries", fmt.Sprintf("%d", completedQueries))
 	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorYellow, float64(completedQueries)/elapsed.Seconds(), colorReset))
 	printStat("Average query time", fmt.Sprintf("%s%v%s", colorYellow, elapsed/time.Duration(completedQueries), colorReset))
-	printInfo("Each query executed sequentially without parallelism")
+	if simulateNetworkLatency {
+		printInfo(fmt.Sprintf("Each query included %v simulated network latency", networkLatency))
+	} else {
+		printInfo("Each query executed sequentially without parallelism")
+	}
 	
 	return benchmarkStats{
 		queriesPerSecond: float64(completedQueries)/elapsed.Seconds(),
@@ -484,7 +558,12 @@ func printComparison(rtreeStats, postgisStats benchmarkStats) {
 	
 	fmt.Printf("\n%sSingle-Threaded Benchmark Results:%s\n", colorBold, colorReset)
 	fmt.Printf("• R-Tree: Each query %sinternally parallelized%s across %d CPU partitions\n", colorGreen, colorReset, runtime.NumCPU())
-	fmt.Printf("• PostGIS: Each query runs %ssequentially%s without parallelism\n\n", colorYellow, colorReset)
+	if simulateNetworkLatency {
+		fmt.Printf("• PostGIS: Each query runs %ssequentially%s with %s%v network latency%s\n\n", 
+			colorYellow, colorReset, colorCyan, networkLatency, colorReset)
+	} else {
+		fmt.Printf("• PostGIS: Each query runs %ssequentially%s without parallelism\n\n", colorYellow, colorReset)
+	}
 	
 	fmt.Printf("%s%-20s %-30s %-30s%s\n", colorBold, "Metric", "R-Tree (Internal Parallel)", "PostGIS (Sequential)", colorReset)
 	fmt.Println(strings.Repeat("-", 80))
@@ -521,10 +600,17 @@ func printComparison(rtreeStats, postgisStats benchmarkStats) {
 	if postgisStats.queriesPerSecond > 0 {
 		ratio := rtreeStats.queriesPerSecond / postgisStats.queriesPerSecond
 		fmt.Printf("\n%sR-Tree is %.1fx faster than PostGIS%s\n", colorBold, ratio, colorReset)
-		fmt.Printf("This speedup comes from %sinternal parallel execution%s across %d CPU partitions\n", 
-			colorGreen, colorReset, runtime.NumCPU())
-		fmt.Printf("Both benchmarks used %ssingle-threaded%s query generation for fair comparison\n", 
-			colorBold, colorReset)
+		if simulateNetworkLatency {
+			fmt.Printf("This represents %sreal-world cloud/remote database performance%s\n", 
+				colorCyan, colorReset)
+			fmt.Printf("R-Tree advantage: %sNo network overhead%s for in-memory queries\n", 
+				colorGreen, colorReset)
+		} else {
+			fmt.Printf("This speedup comes from %sinternal parallel execution%s across %d CPU partitions\n", 
+				colorGreen, colorReset, runtime.NumCPU())
+			fmt.Printf("Both benchmarks used %ssingle-threaded%s query generation for fair comparison\n", 
+				colorBold, colorReset)
+		}
 	}
 	
 	fmt.Println()
