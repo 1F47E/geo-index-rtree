@@ -172,9 +172,12 @@ func loadAndIndex() {
 	
 	numPoints := 1000000
 	numWorkers := runtime.NumCPU()
+	pointsPerWorker := numPoints / numWorkers
 	
+	fmt.Printf("System has %s%d CPU cores%s\n", colorBold, numWorkers, colorReset)
 	fmt.Printf("Loading %s%d%s random points using %s%d%s workers...\n", 
 		colorBold, numPoints, colorReset, colorBold, numWorkers, colorReset)
+	fmt.Printf("Each worker will generate ~%s%d%s points\n", colorBold, pointsPerWorker, colorReset)
 	
 	// Generate points
 	points := generateRandomPoints(numPoints)
@@ -341,7 +344,7 @@ func runPostGISBenchmark() benchmarkStats {
 	printSubtitle("Running PostGIS Bounding Box Queries")
 	
 	// Connect to PostGIS
-	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5433)
+	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5499)
 	if err != nil {
 		log.Printf("Failed to connect to PostGIS: %v", err)
 		printError("PostGIS connection failed - skipping PostGIS benchmark")

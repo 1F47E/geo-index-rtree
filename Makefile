@@ -177,7 +177,7 @@ postgis-up:
 	@echo "Waiting for PostGIS to be ready..."
 	@sleep 10
 	@docker compose ps
-	@echo "PostGIS is ready at localhost:5433"
+	@echo "PostGIS is ready at localhost:5499"
 	@echo "Data is persisted in ./data/postgis/"
 
 postgis-down:

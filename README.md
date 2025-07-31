@@ -205,7 +205,7 @@ go-geo-index/
 - `NEIGHBORS` - Number of nearest neighbors (default: 10)
 
 ### PostGIS Configuration
-- **Port**: 5433 (configurable in docker-compose.yml)
+- **Port**: 5499 (configurable in docker-compose.yml)
 - **Database**: geodb
 - **User**: geouser
 - **Password**: geopass
