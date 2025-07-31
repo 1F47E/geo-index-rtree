@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kass/go-geo-index/pkg/models"
+	"github.com/1F47E/geo-index-rtree/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

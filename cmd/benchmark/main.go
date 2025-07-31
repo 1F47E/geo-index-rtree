@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kass/go-geo-index/pkg/models"
-	"github.com/kass/go-geo-index/pkg/rtree"
+	"github.com/1F47E/geo-index-rtree/pkg/models"
+	"github.com/1F47E/geo-index-rtree/pkg/rtree"
 )
 
 type BenchmarkResult struct {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kass/go-geo-index/pkg/models"
+	"github.com/1F47E/geo-index-rtree/pkg/models"
 )
 
 // IndexData represents the serializable form of the geo index

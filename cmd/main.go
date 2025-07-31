@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kass/go-geo-index/pkg/geo"
+	"github.com/1F47E/geo-index-rtree/pkg/geo"
 	"github.com/spf13/cobra"
 )
 

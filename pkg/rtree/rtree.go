@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dhconnelly/rtreego"
-	"github.com/kass/go-geo-index/pkg/models"
+	"github.com/1F47E/geo-index-rtree/pkg/models"
 )
 
 const (
