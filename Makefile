@@ -1,7 +1,7 @@
 # Go Geo-Index Makefile
 # High-performance R-Tree geographical indexing demo
 
-.PHONY: all build clean test benchmark help install-deps postgis-up postgis-down postgis-reset
+.PHONY: all build clean clean-cache test benchmark help install-deps postgis-up postgis-down postgis-reset
 
 # Variables
 BINARY_NAME=go-geo-index
@@ -28,6 +28,7 @@ help:
 	@echo "  make build          - Build the binary"
 	@echo "  make install-deps   - Install Go dependencies"
 	@echo "  make clean          - Remove binary and index files"
+	@echo "  make clean-cache    - Clear all cached data (R-tree and PostGIS)"
 	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Demo commands:"
@@ -80,6 +81,13 @@ clean:
 	@rm -f $(INDEX_FILE)
 	@rm -f *.gob
 	@echo "Clean complete!"
+
+clean-cache:
+	@echo "Clearing all cached data..."
+	@rm -f $(INDEX_FILE)
+	@rm -f *.gob
+	@rm -rf data/postgis
+	@echo "Cache cleared: R-tree index and PostGIS data removed"
 
 test:
 	@echo "Running tests..."

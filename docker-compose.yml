@@ -1,0 +1,18 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    platform: linux/amd64
+    container_name: go-geo-index-postgis
+    environment:
+      POSTGRES_USER: geouser
+      POSTGRES_PASSWORD: geopass
+      POSTGRES_DB: geodb
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./data/postgis:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geouser -d geodb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

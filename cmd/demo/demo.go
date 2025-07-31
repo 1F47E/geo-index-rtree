@@ -159,7 +159,7 @@ func loadAndIndex() {
 			printStat("Points per MB", fmt.Sprintf("%.0f", float64(count)/(float64(fileSize)/(1<<20))))
 			printStat("Worker threads", runtime.NumCPU())
 			
-			if count >= 100000 {
+			if count >= 1000000 {
 				fmt.Println()
 				printInfo("Skipping index generation - using existing data")
 				return
@@ -170,7 +170,7 @@ func loadAndIndex() {
 	
 	printSubtitle("Loading Points")
 	
-	numPoints := 100000
+	numPoints := 1000000
 	numWorkers := runtime.NumCPU()
 	
 	fmt.Printf("Loading %s%d%s random points using %s%d%s workers...\n", 
@@ -355,7 +355,7 @@ func runPostGISBenchmark() benchmarkStats {
 	
 	// Check if data is already loaded
 	count, err := db.Count()
-	if err == nil && count >= 100000 {
+	if err == nil && count >= 1000000 {
 		printSuccess(fmt.Sprintf("Found existing PostGIS data with %d points", count))
 		
 		// Get and display database statistics
@@ -379,7 +379,7 @@ func runPostGISBenchmark() benchmarkStats {
 		}
 		
 		// Generate same points
-		points := generateRandomPoints(100000)
+		points := generateRandomPoints(1000000)
 		
 		// Bulk insert
 		start := time.Now()
@@ -681,7 +681,7 @@ func printSummary() {
 	// printInfo("Quick k-nearest neighbor lookups (k=10)")
 	
 	fmt.Printf("\n%sBenchmark Duration:%s 10 seconds per test\n", colorBold, colorReset)
-	fmt.Printf("%sTest Dataset:%s 100,000 geographic points\n", colorBold, colorReset)
+	fmt.Printf("%sTest Dataset:%s 1,000,000 geographic points\n", colorBold, colorReset)
 	
 	fmt.Println()
 }
