@@ -172,29 +172,29 @@ postgis-up:
 	@echo "Creating data directory if needed..."
 	@mkdir -p data/postgis
 	@echo "Pulling PostGIS image if needed..."
-	@docker-compose pull || (echo "Error: Failed to pull image. Check internet connection and Docker Hub access." && exit 1)
-	@docker-compose up -d
+	@docker compose pull || (echo "Error: Failed to pull image. Check internet connection and Docker Hub access." && exit 1)
+	@docker compose up -d
 	@echo "Waiting for PostGIS to be ready..."
 	@sleep 10
-	@docker-compose ps
+	@docker compose ps
 	@echo "PostGIS is ready at localhost:5433"
 	@echo "Data is persisted in ./data/postgis/"
 
 postgis-down:
 	@echo "Stopping PostGIS container..."
-	@docker-compose down
+	@docker compose down
 	@echo "PostGIS stopped"
 
 postgis-reset:
 	@echo "Resetting PostGIS data..."
-	@docker-compose down -v
-	@docker-compose up -d
+	@docker compose down -v
+	@docker compose up -d
 	@echo "Waiting for PostGIS to be ready..."
 	@sleep 5
 	@echo "PostGIS has been reset"
 
 postgis-logs:
-	@docker-compose logs -f postgis
+	@docker compose logs -f postgis
 
 # Demo with PostGIS comparison
 demo-full: postgis-up demo

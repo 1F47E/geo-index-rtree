@@ -116,7 +116,7 @@ func main() {
 	// Stop PostGIS
 	if postgisStats.totalQueries > 0 {
 		printInfo("Stopping PostGIS container...")
-		cmd := exec.Command("docker-compose", "down")
+		cmd := exec.Command("docker", "compose", "down")
 		if err := cmd.Run(); err != nil {
 			printError("Failed to stop PostGIS container. Run 'make postgis-down' manually.")
 		} else {

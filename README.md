@@ -36,8 +36,8 @@ On a modern multi-core system with 1 million geographic points:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/go-geo-index.git
-cd go-geo-index
+git clone https://github.com/1F47E/geo-index-rtree.git
+cd geo-index-rtree
 
 # Install dependencies
 make install-deps
@@ -281,8 +281,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ### Development Setup
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/go-geo-index.git
-cd go-geo-index
+git clone https://github.com/1F47E/geo-index-rtree.git
+cd geo-index-rtree
 make install-deps
 
 # Run tests
