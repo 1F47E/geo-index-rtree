@@ -1,8 +1,7 @@
 services:
   postgis:
-    # PostGIS 3.4.1 - Released in late 2023
-    # Using this specific version for demo compatibility
-    image: postgis/postgis:16-3.4.1
+    # Using latest PostGIS with PostgreSQL 16 for optimal performance
+    image: postgis/postgis:16-3.4
     platform: linux/amd64
     container_name: go-geo-index-postgis
     environment:
