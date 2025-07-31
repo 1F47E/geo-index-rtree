@@ -87,7 +87,6 @@ test:
 
 # Demo commands
 demo: build
-	@echo "Running interactive demo with colorful output..."
 	@$(GO) run ./cmd/demo/demo.go
 
 load: build
@@ -160,11 +159,18 @@ stats: build check-index
 # PostGIS commands
 postgis-up:
 	@echo "Starting PostGIS container..."
+	@echo "Checking Docker daemon..."
+	@docker info > /dev/null 2>&1 || (echo "Error: Docker is not running!" && exit 1)
+	@echo "Creating data directory if needed..."
+	@mkdir -p data/postgis
+	@echo "Pulling PostGIS image if needed..."
+	@docker-compose pull || (echo "Error: Failed to pull image. Check internet connection and Docker Hub access." && exit 1)
 	@docker-compose up -d
 	@echo "Waiting for PostGIS to be ready..."
-	@sleep 5
+	@sleep 10
 	@docker-compose ps
-	@echo "PostGIS is ready at localhost:5432"
+	@echo "PostGIS is ready at localhost:5433"
+	@echo "Data is persisted in ./data/postgis/"
 
 postgis-down:
 	@echo "Stopping PostGIS container..."

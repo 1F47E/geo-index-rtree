@@ -159,7 +159,7 @@ func loadAndIndex() {
 			printStat("Points per MB", fmt.Sprintf("%.0f", float64(count)/(float64(fileSize)/(1<<20))))
 			printStat("Worker threads", runtime.NumCPU())
 			
-			if count >= 1000000 {
+			if count >= 100000 {
 				fmt.Println()
 				printInfo("Skipping index generation - using existing data")
 				return
@@ -170,7 +170,7 @@ func loadAndIndex() {
 	
 	printSubtitle("Loading Points")
 	
-	numPoints := 1000000
+	numPoints := 100000
 	numWorkers := runtime.NumCPU()
 	
 	fmt.Printf("Loading %s%d%s random points using %s%d%s workers...\n", 
@@ -341,18 +341,33 @@ func runPostGISBenchmark() benchmarkStats {
 	printSubtitle("Running PostGIS Bounding Box Queries")
 	
 	// Connect to PostGIS
-	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5432)
+	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5433)
 	if err != nil {
 		log.Printf("Failed to connect to PostGIS: %v", err)
-		printError("PostGIS connection failed - is Docker running?")
+		printError("PostGIS connection failed - skipping PostGIS benchmark")
+		printInfo("To run PostGIS benchmark:")
+		printInfo("1. Ensure Docker is running")
+		printInfo("2. Check internet connection for Docker Hub access")
+		printInfo("3. Run 'make postgis-up' manually")
 		return benchmarkStats{}
 	}
 	defer db.Close()
 	
 	// Check if data is already loaded
 	count, err := db.Count()
-	if err == nil && count >= 1000000 {
-		printInfo(fmt.Sprintf("Found %d points in PostGIS database", count))
+	if err == nil && count >= 100000 {
+		printSuccess(fmt.Sprintf("Found existing PostGIS data with %d points", count))
+		
+		// Get and display database statistics
+		stats, err := db.GetDatabaseStats()
+		if err == nil {
+			fmt.Println()
+			printStat("Database size", stats["database_size"])
+			printStat("Table size", stats["table_size"])
+			printStat("Index size", stats["index_size"])
+			printStat("Points indexed", fmt.Sprintf("%s%d%s", colorGreen, stats["row_count"], colorReset))
+			fmt.Println()
+		}
 	} else {
 		// Load data into PostGIS
 		printInfo("Loading points into PostGIS...")
@@ -364,7 +379,7 @@ func runPostGISBenchmark() benchmarkStats {
 		}
 		
 		// Generate same points
-		points := generateRandomPoints(1000000)
+		points := generateRandomPoints(100000)
 		
 		// Bulk insert
 		start := time.Now()
@@ -666,7 +681,7 @@ func printSummary() {
 	// printInfo("Quick k-nearest neighbor lookups (k=10)")
 	
 	fmt.Printf("\n%sBenchmark Duration:%s 10 seconds per test\n", colorBold, colorReset)
-	fmt.Printf("%sTest Dataset:%s 1,000,000 geographic points\n", colorBold, colorReset)
+	fmt.Printf("%sTest Dataset:%s 100,000 geographic points\n", colorBold, colorReset)
 	
 	fmt.Println()
 }

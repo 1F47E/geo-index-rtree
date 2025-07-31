@@ -40,3 +40,6 @@ Thumbs.db
 *.tmp
 *.bak
 *.log
+# Data directories
+data/
+*.gob
