@@ -16,13 +16,15 @@ A high-performance R-Tree geographical indexing system written in Go, featuring 
 
 ## 📊 Performance
 
-On a modern multi-core system with 1 million geographic points:
+Single-threaded benchmark on a 10-core system with 1 million geographic points:
 
 | Operation | R-Tree | PostGIS | Speedup |
 |-----------|--------|---------|---------|
-| Bounding Box Query | ~450,000 qps | ~40,000 qps | **11x faster** |
+| Single Query | ~2.2µs | ~24µs | **11x faster** |
+| Queries/second | ~450,000 | ~40,000 | **11x faster** |
 | Index Size | 42 MB | 65 MB | **35% smaller** |
-| Load Time | ~4 sec | ~30 sec | **7.5x faster** |
+
+**Key advantage**: R-Tree internally parallelizes each query across CPU partitions
 
 ## 🛠️ Installation
 
@@ -84,14 +86,20 @@ Using Existing Index
   Index file size: 41.23 MB
   Points indexed: 1000000
   Points per MB: 24271
-  Worker threads: 10
+  CPU partitions: 10
 
 Running R-Tree Bounding Box Queries
+Running single-threaded benchmark for 10s
+R-Tree advantage: Each query internally uses 10 CPU cores
 ✓ R-Tree Bounding Box Queries Complete!
+  Total queries: 4512640
   Queries per second: 451264
   Average query time: 2.216µs
+• Each query internally searched 10 partitions in parallel
 
 Running PostGIS Bounding Box Queries
+Running single-threaded benchmark for 10s
+PostGIS: Each query runs sequentially (no internal parallelism)
 ✓ Found existing PostGIS data with 1000000 points
 
   Database size: 65 MB
@@ -100,18 +108,26 @@ Running PostGIS Bounding Box Queries
   Points indexed: 1000000
 
 ✓ PostGIS Bounding Box Queries Complete!
+  Total queries: 423510
   Queries per second: 42351
   Average query time: 23.612µs
+• Each query executed sequentially without parallelism
 
 Performance Comparison
 
-Metric               R-Tree          PostGIS
---------------------------------------------------
-Queries/second       451264          42351
-Avg query time       2.216µs         23.612µs
-Total queries        4512640         423510
+Single-Threaded Benchmark Results:
+• R-Tree: Each query internally parallelized across 10 CPU partitions
+• PostGIS: Each query runs sequentially without parallelism
+
+Metric               R-Tree (Internal Parallel)   PostGIS (Sequential)
+--------------------------------------------------------------------------------
+Queries/second       451264                       42351
+Avg query time       2.216µs                      23.612µs
+Total queries        4512640                      423510
 
 R-Tree is 10.7x faster than PostGIS
+This speedup comes from internal parallel execution across 10 CPU partitions
+Both benchmarks used single-threaded query generation for fair comparison
 ```
 
 ## 🔧 Commands

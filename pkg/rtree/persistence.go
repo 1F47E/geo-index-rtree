@@ -17,11 +17,11 @@ type IndexData struct {
 // SaveToFile saves the index to a binary file
 func (g *GeoIndex) SaveToFile(filename string) error {
 	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	// Extract all points from the tree
-	// Since rtreego doesn't provide a way to iterate all items,
-	// we'll use a large bounding box to get all points
+	
+	// Extract all points from all partitions
+	// We need to unlock before calling QueryBox to avoid deadlock
+	g.mu.RUnlock()
+	
 	largeBounds := models.BoundingBox{
 		BottomLeft: models.Location{Lat: -90, Lon: -180},
 		TopRight:   models.Location{Lat: 90, Lon: 180},

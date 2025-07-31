@@ -3,6 +3,7 @@ package rtree
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 func TestNewGeoIndex(t *testing.T) {
 	index := NewGeoIndex()
 	assert.NotNil(t, index)
-	assert.NotNil(t, index.tree)
+	assert.NotNil(t, index.partitions)
+	assert.Equal(t, runtime.NumCPU(), index.numCPU)
+	assert.Equal(t, runtime.NumCPU(), len(index.partitions))
 	assert.Equal(t, int64(0), index.Count())
 }
 

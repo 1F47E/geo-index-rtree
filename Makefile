@@ -80,6 +80,7 @@ clean:
 	@rm -f $(BINARY_NAME)
 	@rm -f $(INDEX_FILE)
 	@rm -f *.gob
+	@rm -f demo
 	@echo "Clean complete!"
 
 clean-cache:
@@ -87,7 +88,8 @@ clean-cache:
 	@rm -f $(INDEX_FILE)
 	@rm -f *.gob
 	@rm -rf data/postgis
-	@echo "Cache cleared: R-tree index and PostGIS data removed"
+	@rm -f demo
+	@echo "Cache cleared: R-tree index, PostGIS data, and demo binary removed"
 
 test:
 	@echo "Running tests..."
@@ -182,7 +184,7 @@ postgis-up:
 
 postgis-down:
 	@echo "Stopping PostGIS container..."
-	@docker compose down
+	@docker compose down 2>/dev/null || true
 	@echo "PostGIS stopped"
 
 postgis-reset:
@@ -197,6 +199,6 @@ postgis-logs:
 	@docker compose logs -f postgis
 
 # Demo with PostGIS comparison
-demo-full: postgis-up demo
+demo-full: postgis-down postgis-up demo
 
 .SILENT: help

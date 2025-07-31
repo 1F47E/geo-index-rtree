@@ -1,6 +1,7 @@
 package postgis
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -15,7 +16,7 @@ type PostGISIndex struct {
 
 // NewPostGISIndex creates a new PostGIS connection
 func NewPostGISIndex(host, user, password, dbname string, port int) (*PostGISIndex, error) {
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable connect_timeout=5",
 		host, port, user, password, dbname)
 	
 	db, err := sql.Open("postgres", connStr)
@@ -23,8 +24,12 @@ func NewPostGISIndex(host, user, password, dbname string, port int) (*PostGISInd
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	
-	// Test connection
-	if err := db.Ping(); err != nil {
+	// Test connection with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 	
