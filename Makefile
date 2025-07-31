@@ -1,7 +1,7 @@
 # Go Geo-Index Makefile
 # High-performance R-Tree geographical indexing demo
 
-.PHONY: all build clean test benchmark help install-deps
+.PHONY: all build clean test benchmark help install-deps postgis-up postgis-down postgis-reset
 
 # Variables
 BINARY_NAME=go-geo-index
@@ -31,11 +31,18 @@ help:
 	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Demo commands:"
-	@echo "  make demo           - Run complete demo (load + all benchmarks)"
+	@echo "  make demo           - Run R-Tree demo with colorful output"
+	@echo "  make demo-full      - Run full demo with PostGIS comparison"
 	@echo "  make load-1m        - Load 1 million random points"
 	@echo "  make load-10m       - Load 10 million random points"
 	@echo "  make load-100m      - Load 100 million random points"
 	@echo "  make load           - Load custom number of points (POINTS=1000000)"
+	@echo ""
+	@echo "PostGIS commands:"
+	@echo "  make postgis-up     - Start PostGIS Docker container"
+	@echo "  make postgis-down   - Stop PostGIS container"
+	@echo "  make postgis-reset  - Reset PostGIS data"
+	@echo "  make postgis-logs   - View PostGIS logs"
 	@echo ""
 	@echo "Benchmark commands:"
 	@echo "  make benchmark      - Run bounding box queries benchmark"
@@ -149,5 +156,33 @@ stats: build check-index
 	@echo "Index statistics:"
 	@ls -lh $(INDEX_FILE) | awk '{print "Index file size: " $$5}'
 	@echo "Points in index: Check with the tool"
+
+# PostGIS commands
+postgis-up:
+	@echo "Starting PostGIS container..."
+	@docker-compose up -d
+	@echo "Waiting for PostGIS to be ready..."
+	@sleep 5
+	@docker-compose ps
+	@echo "PostGIS is ready at localhost:5432"
+
+postgis-down:
+	@echo "Stopping PostGIS container..."
+	@docker-compose down
+	@echo "PostGIS stopped"
+
+postgis-reset:
+	@echo "Resetting PostGIS data..."
+	@docker-compose down -v
+	@docker-compose up -d
+	@echo "Waiting for PostGIS to be ready..."
+	@sleep 5
+	@echo "PostGIS has been reset"
+
+postgis-logs:
+	@docker-compose logs -f postgis
+
+# Demo with PostGIS comparison
+demo-full: postgis-up demo
 
 .SILENT: help

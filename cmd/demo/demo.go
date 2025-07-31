@@ -5,12 +5,14 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kass/go-geo-index/pkg/models"
+	"github.com/kass/go-geo-index/pkg/postgis"
 	"github.com/kass/go-geo-index/pkg/rtree"
 	"github.com/mattn/go-isatty"
 )
@@ -91,20 +93,36 @@ func main() {
 	// Phase 1: Load Points
 	loadAndIndex()
 	
-	// Phase 2: Bounding Box Queries
+	// Phase 2: R-Tree Bounding Box Queries
 	time.Sleep(500 * time.Millisecond)
-	runBenchmarks()
+	rtreeStats := runBenchmarks()
 	
-	// Phase 3: Radius Searches
+	// Phase 3: PostGIS Bounding Box Queries
+	time.Sleep(500 * time.Millisecond)
+	postgisStats := runPostGISBenchmark()
+	
+	// Phase 4: Radius Searches
 	// time.Sleep(500 * time.Millisecond)
 	// runRadiusSearches()
 	
-	// Phase 4: Nearest Neighbor
+	// Phase 5: Nearest Neighbor
 	// time.Sleep(500 * time.Millisecond)
 	// runNearestNeighbors()
 	
 	// Summary
+	printComparison(rtreeStats, postgisStats)
 	printSummary()
+	
+	// Stop PostGIS
+	if postgisStats.totalQueries > 0 {
+		printInfo("Stopping PostGIS container...")
+		cmd := exec.Command("docker-compose", "down")
+		if err := cmd.Run(); err != nil {
+			printError("Failed to stop PostGIS container. Run 'make postgis-down' manually.")
+		} else {
+			printSuccess("PostGIS container stopped")
+		}
+	}
 }
 
 func loadAndIndex() {
@@ -226,7 +244,13 @@ func loadAndIndex() {
 	printSuccess(fmt.Sprintf("Index saved to %s", indexFile))
 }
 
-func runBenchmarks() {
+type benchmarkStats struct {
+	queriesPerSecond float64
+	avgQueryTime     time.Duration
+	totalQueries     int64
+}
+
+func runBenchmarks() benchmarkStats {
 	printSubtitle("Running Bounding Box Queries")
 	
 	// Load index
@@ -302,9 +326,176 @@ func runBenchmarks() {
 	
 	completedQueries := queryCount.Load()
 	fmt.Println()
-	printSuccess("Bounding Box Queries Complete!")
+	printSuccess("R-Tree Bounding Box Queries Complete!")
 	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorGreen, float64(completedQueries)/elapsed.Seconds(), colorReset))
 	printStat("Average query time", fmt.Sprintf("%s%v%s", colorGreen, elapsed/time.Duration(completedQueries), colorReset))
+	
+	return benchmarkStats{
+		queriesPerSecond: float64(completedQueries)/elapsed.Seconds(),
+		avgQueryTime:     elapsed/time.Duration(completedQueries),
+		totalQueries:     completedQueries,
+	}
+}
+
+func runPostGISBenchmark() benchmarkStats {
+	printSubtitle("Running PostGIS Bounding Box Queries")
+	
+	// Connect to PostGIS
+	db, err := postgis.NewPostGISIndex("localhost", "geouser", "geopass", "geodb", 5432)
+	if err != nil {
+		log.Printf("Failed to connect to PostGIS: %v", err)
+		printError("PostGIS connection failed - is Docker running?")
+		return benchmarkStats{}
+	}
+	defer db.Close()
+	
+	// Check if data is already loaded
+	count, err := db.Count()
+	if err == nil && count >= 1000000 {
+		printInfo(fmt.Sprintf("Found %d points in PostGIS database", count))
+	} else {
+		// Load data into PostGIS
+		printInfo("Loading points into PostGIS...")
+		
+		// Initialize schema
+		if err := db.InitSchema(); err != nil {
+			log.Printf("Failed to initialize schema: %v", err)
+			return benchmarkStats{}
+		}
+		
+		// Generate same points
+		points := generateRandomPoints(1000000)
+		
+		// Bulk insert
+		start := time.Now()
+		if err := db.BulkInsertPoints(points); err != nil {
+			log.Printf("Failed to insert points: %v", err)
+			return benchmarkStats{}
+		}
+		
+		// Create spatial index
+		if err := db.CreateSpatialIndex(); err != nil {
+			log.Printf("Failed to create spatial index: %v", err)
+			return benchmarkStats{}
+		}
+		
+		elapsed := time.Since(start)
+		printSuccess(fmt.Sprintf("Loaded %d points into PostGIS in %v", len(points), elapsed))
+	}
+	
+	benchDuration := 10 * time.Second
+	numWorkers := runtime.NumCPU()
+	
+	fmt.Printf("Running PostGIS bounding box queries for %s%v%s using %s%d%s workers...\n",
+		colorBold, benchDuration, colorReset, colorBold, numWorkers, colorReset)
+	
+	// Run benchmark
+	var queryCount atomic.Int64
+	
+	start := time.Now()
+	deadline := start.Add(benchDuration)
+	
+	// Progress reporter
+	done := make(chan bool)
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-done:
+				fmt.Println()
+				return
+			case <-ticker.C:
+				elapsed := time.Since(start)
+				percent := elapsed.Seconds() / benchDuration.Seconds() * 100
+				if percent > 100 {
+					percent = 100
+				}
+				printProgress(int(percent), 100, "Benchmarking")
+			}
+		}
+	}()
+	
+	var wg sync.WaitGroup
+	
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		
+		go func() {
+			defer wg.Done()
+			
+			for time.Now().Before(deadline) {
+				// Random query
+				centerLat := rand.Float64()*180 - 90
+				centerLon := rand.Float64()*360 - 180
+				boxSize := rand.Float64()*1.9 + 0.1
+				
+				box := models.BoundingBox{
+					BottomLeft: models.Location{Lat: centerLat - boxSize/2, Lon: centerLon - boxSize/2},
+					TopRight: models.Location{Lat: centerLat + boxSize/2, Lon: centerLon + boxSize/2},
+				}
+				
+				_, err := db.QueryBox(box)
+				if err == nil {
+					queryCount.Add(1)
+				}
+			}
+		}()
+	}
+	
+	wg.Wait()
+	done <- true
+	elapsed := time.Since(start)
+	
+	completedQueries := queryCount.Load()
+	fmt.Println()
+	printSuccess("PostGIS Bounding Box Queries Complete!")
+	printStat("Queries per second", fmt.Sprintf("%s%.0f%s", colorGreen, float64(completedQueries)/elapsed.Seconds(), colorReset))
+	printStat("Average query time", fmt.Sprintf("%s%v%s", colorGreen, elapsed/time.Duration(completedQueries), colorReset))
+	
+	return benchmarkStats{
+		queriesPerSecond: float64(completedQueries)/elapsed.Seconds(),
+		avgQueryTime:     elapsed/time.Duration(completedQueries),
+		totalQueries:     completedQueries,
+	}
+}
+
+func printError(message string) {
+	fmt.Printf("%s✗ %s%s\n", colorRed, message, colorReset)
+}
+
+func printComparison(rtreeStats, postgisStats benchmarkStats) {
+	printTitle("Performance Comparison")
+	
+	fmt.Printf("\n%s%-20s %s %s%s\n", colorBold, "Metric", "R-Tree", "PostGIS", colorReset)
+	fmt.Println(strings.Repeat("-", 50))
+	
+	// Queries per second
+	rtreeQPS := fmt.Sprintf("%.0f", rtreeStats.queriesPerSecond)
+	postgisQPS := fmt.Sprintf("%.0f", postgisStats.queriesPerSecond)
+	fmt.Printf("%-20s %s%-15s%s %s%-15s%s\n", "Queries/second", 
+		colorGreen, rtreeQPS, colorReset,
+		colorYellow, postgisQPS, colorReset)
+	
+	// Average query time
+	rtreeAvg := rtreeStats.avgQueryTime.String()
+	postgisAvg := postgisStats.avgQueryTime.String()
+	fmt.Printf("%-20s %s%-15s%s %s%-15s%s\n", "Avg query time",
+		colorGreen, rtreeAvg, colorReset,
+		colorYellow, postgisAvg, colorReset)
+	
+	// Total queries
+	fmt.Printf("%-20s %-15d %-15d\n", "Total queries", 
+		rtreeStats.totalQueries, postgisStats.totalQueries)
+	
+	// Performance ratio
+	if postgisStats.queriesPerSecond > 0 {
+		ratio := rtreeStats.queriesPerSecond / postgisStats.queriesPerSecond
+		fmt.Printf("\n%sR-Tree is %.1fx faster than PostGIS%s\n", colorBold, ratio, colorReset)
+	}
+	
+	fmt.Println()
 }
 
 func runRadiusSearches() {
