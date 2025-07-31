@@ -1,0 +1,29 @@
+# Go Geo-Index Configuration
+
+# Demo configuration
+demo:
+  # Number of points to generate and index
+  points: 1000000
+  
+  # Benchmark duration in seconds
+  benchmark_duration: 10
+
+# PostGIS configuration
+postgis:
+  host: localhost
+  port: 5499
+  user: geouser
+  password: geopass
+  database: geodb
+  
+  # Connection pool settings
+  max_connections: 25
+  connection_timeout: 5 # seconds
+
+# Network latency simulation
+network:
+  # Simulate network latency for PostGIS queries (in milliseconds)
+  # 0 = no simulation (local database)
+  # 3 = typical cloud database latency in same region
+  # 10-50 = cross-region latency
+  simulated_latency_ms: 4

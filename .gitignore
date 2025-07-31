@@ -44,6 +44,3 @@ Thumbs.db
 data/
 *.gob
 demo
-
-# Configuration (users should copy config.yaml.example to config.yaml)
-config.yaml
