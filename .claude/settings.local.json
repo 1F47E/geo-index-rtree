@@ -6,7 +6,9 @@
       "Bash(make:*)",
       "Bash(go build:*)",
       "Bash(go test:*)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "Bash(dmesg:*)",
+      "Bash(sudo dmesg:*)"
     ],
     "deny": []
   }

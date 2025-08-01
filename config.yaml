@@ -3,7 +3,7 @@
 # Demo configuration
 demo:
   # Number of points to generate and index
-  points: 1000000
+  points: 6000000
   
   # Benchmark duration in seconds
   benchmark_duration: 10

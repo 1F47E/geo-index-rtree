@@ -777,8 +777,8 @@ func printSummary() {
 	printInfo("In-memory spatial indexing with microsecond latency")
 	printInfo("Single-threaded benchmark shows pure algorithmic advantage")
 	
-	fmt.Printf("\n%sBenchmark Duration:%s 10 seconds per test\n", colorBold, colorReset)
-	fmt.Printf("%sTest Dataset:%s 1,000,000 geographic points\n", colorBold, colorReset)
+	fmt.Printf("\n%sBenchmark Duration:%s %d seconds per test\n", colorBold, colorReset, config.Demo.BenchmarkDuration)
+	fmt.Printf("%sTest Dataset:%s %d geographic points\n", colorBold, colorReset, config.Demo.Points)
 	
 	fmt.Println()
 }
